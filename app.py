@@ -6,7 +6,7 @@ import streamlit as st
 from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
 from bot.scraper import get_public_ip, normalize_rut, query_rut
 
-st.set_page_config(page_title="AFP Lookup", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="RPA SUPERINTENDENCIA", page_icon="🔍", layout="centered")
 
 _DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe"
 _BATCH_LIMIT = 90
@@ -113,7 +113,7 @@ def _prepare_download(reason: str) -> None:
 
 def paso_descarga() -> None:
     st.markdown("<br>", unsafe_allow_html=True)
-    st.title("🔍 AFP Lookup")
+    st.title("🔍 RPA SUPERINTENDENCIA")
     st.markdown(
         "Sube un Excel con RUTs y la app consulta automaticamente en la "
         "Superintendencia de Pensiones que AFP tiene cada trabajador."
