@@ -8,7 +8,7 @@ from bot.scraper import get_public_ip, normalize_rut, query_rut
 
 st.set_page_config(page_title="AFP Lookup", page_icon="🔍", layout="centered")
 
-_DOWNLOAD_URL = ""
+_DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe"
 _BATCH_LIMIT = 90
 
 
