@@ -7,7 +7,7 @@ from openpyxl import Workbook, load_workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bot.excel import find_or_create_afp2_column, read_ruts, to_bytes, write_afp
+from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
 
 
 def _make_excel(headers: list, rows: list[list]) -> bytes:
@@ -83,6 +83,37 @@ def test_write_afp():
     ws.append(["15800185-3", ""])
     write_afp(ws, 2, 2, "HABITAT")
     assert ws.cell(2, 2).value == "HABITAT"
+
+
+def test_get_pending_rows_filtra_ya_procesados():
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["RUT", "AFP 2"])
+    ws.append(["15800185-3", "HABITAT"])   # ya procesado
+    ws.append(["12345678-9", ""])           # pendiente
+    ws.append(["11111111-1", None])         # pendiente
+    pending = get_pending_rows(ws, rut_col=1, afp2_col=2, data_rows=[2, 3, 4])
+    assert pending == [3, 4]
+
+
+def test_get_pending_rows_todos_pendientes():
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["RUT", "AFP 2"])
+    ws.append(["15800185-3", None])
+    ws.append(["12345678-9", None])
+    pending = get_pending_rows(ws, rut_col=1, afp2_col=2, data_rows=[2, 3])
+    assert pending == [2, 3]
+
+
+def test_get_pending_rows_todos_procesados():
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["RUT", "AFP 2"])
+    ws.append(["15800185-3", "HABITAT"])
+    ws.append(["12345678-9", "CAPITAL"])
+    pending = get_pending_rows(ws, rut_col=1, afp2_col=2, data_rows=[2, 3])
+    assert pending == []
 
 
 def test_to_bytes_roundtrip():

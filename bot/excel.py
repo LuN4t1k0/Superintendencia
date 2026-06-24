@@ -38,6 +38,13 @@ def find_or_create_afp2_column(ws: Worksheet) -> int:
     return new_col
 
 
+def get_pending_rows(
+    ws: Worksheet, rut_col: int, afp2_col: int, data_rows: list[int]
+) -> list[int]:
+    """Return rows where AFP 2 is still empty (not yet processed)."""
+    return [row for row in data_rows if not ws.cell(row, afp2_col).value]
+
+
 def write_afp(ws: Worksheet, row: int, col: int, value: str) -> None:
     ws.cell(row, col, value)
 
