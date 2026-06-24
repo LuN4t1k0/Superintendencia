@@ -1,0 +1,57 @@
+name: Build Windows Launcher
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "superintendencia-launcher/**"
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install pyinstaller requests
+
+      - name: Write config.py from secret
+        working-directory: superintendencia-launcher
+        shell: bash
+        run: |
+          cat > config.py << 'EOF'
+          GITHUB_TOKEN  = "${{ secrets.LAUNCHER_APP_REPO_TOKEN }}"
+          GITHUB_OWNER  = "${{ github.repository_owner }}"
+          GITHUB_REPO   = "${{ github.event.repository.name }}"
+          GITHUB_BRANCH = "main"
+          EOF
+
+      - name: Build .exe
+        working-directory: superintendencia-launcher
+        run: |
+          pyinstaller `
+            --onefile `
+            --windowed `
+            --name AFPLookup `
+            --add-data "config.py;." `
+            launcher.py
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: launcher-latest
+          name: "AFP Lookup (Windows)"
+          files: superintendencia-launcher/dist/AFPLookup.exe
+          make_latest: true
