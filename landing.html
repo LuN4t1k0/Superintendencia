@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AFP Lookup — Consulta automática de AFP</title>
+<style>
+:root {
+  --accent:       #1C5FAD;
+  --accent-h:     #164F96;
+  --accent-muted: rgba(28, 95, 173, 0.09);
+  --bg:           #F5F6FA;
+  --surface:      #FFFFFF;
+  --text:         #111827;
+  --sub:          #4B5E7E;
+  --muted:        #8A99B8;
+  --border:       #DDE2EE;
+  --stripe:       #F8F9FC;
+  --green:        #1A7A4F;
+  --green-bg:     rgba(26, 122, 79, 0.09);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-muted: rgba(59, 130, 246, 0.12);
+    --bg:      #0D1726;
+    --surface: #142038;
+    --text:    #E8EEFF;
+    --sub:     #8FA5C8;
+    --muted:   #4B6080;
+    --border:  #1E3252;
+    --stripe:  #1A2A42;
+    --green:   #2ECC87;
+    --green-bg: rgba(46, 204, 135, 0.11);
+  }
+}
+:root[data-theme="dark"] {
+  --accent-muted: rgba(59, 130, 246, 0.12);
+  --bg:      #0D1726;
+  --surface: #142038;
+  --text:    #E8EEFF;
+  --sub:     #8FA5C8;
+  --muted:   #4B6080;
+  --border:  #1E3252;
+  --stripe:  #1A2A42;
+  --green:   #2ECC87;
+  --green-bg: rgba(46, 204, 135, 0.11);
+}
+:root[data-theme="light"] {
+  --accent-muted: rgba(28, 95, 173, 0.09);
+  --bg:      #F5F6FA;
+  --surface: #FFFFFF;
+  --text:    #111827;
+  --sub:     #4B5E7E;
+  --muted:   #8A99B8;
+  --border:  #DDE2EE;
+  --stripe:  #F8F9FC;
+  --green:   #1A7A4F;
+  --green-bg: rgba(26, 122, 79, 0.09);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.875rem 2rem;
+}
+.nav-brand {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-weight: 700; font-size: 0.95rem; color: var(--text);
+  text-decoration: none; letter-spacing: -0.01em;
+}
+.nav-brand-accent { color: var(--accent); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  background: var(--accent); color: #fff;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px; font-weight: 600; font-size: 0.875rem;
+  text-decoration: none; transition: background 0.14s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--accent-h); }
+.btn svg { flex-shrink: 0; }
+
+/* ── Hero ── */
+.hero {
+  max-width: 1080px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 4rem; align-items: center;
+  padding: 5rem 2rem 4.5rem;
+}
+.hero-eyebrow {
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 1rem;
+}
+.hero h1 {
+  font-family: Georgia, 'Cambria', serif;
+  font-size: clamp(1.9rem, 3.5vw, 2.9rem);
+  line-height: 1.18; font-weight: normal;
+  text-wrap: balance; margin-bottom: 1.125rem;
+}
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero-sub {
+  font-size: 1.025rem; color: var(--sub);
+  max-width: 40ch; margin-bottom: 2.25rem; line-height: 1.7;
+}
+.hero-meta {
+  margin-top: 0.875rem;
+  font-size: 0.78rem; color: var(--muted);
+}
+
+/* ── Demo card ── */
+.demo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 12px 40px rgba(0,0,0,0.08);
+}
+.demo-bar {
+  background: var(--stripe);
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1rem;
+  display: flex; align-items: center; gap: 0.45rem;
+  font-size: 0.75rem; color: var(--sub);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+.dot-r { background: #F87171; }
+.dot-y { background: #FBBF24; }
+.dot-g { background: #34D399; }
+.demo-filename { margin-left: 0.25rem; font-weight: 500; }
+
+.demo-progress {
+  height: 2px; background: var(--border);
+  position: relative; overflow: hidden;
+}
+.demo-progress-bar {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: var(--accent); width: 0%;
+  transition: width 0.6s ease;
+}
+
+.demo-tbl { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.demo-tbl th {
+  background: var(--stripe);
+  color: var(--muted);
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.55rem 0.875rem; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.demo-tbl td {
+  padding: 0.58rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.demo-tbl tr:last-child td { border-bottom: none; }
+.demo-tbl tr:nth-child(even) td { background: var(--stripe); }
+
+.rut { font-family: 'Courier New', monospace; font-size: 0.79rem; color: var(--sub); }
+.nombre { color: var(--text); }
+.afp-val {
+  font-weight: 700; color: var(--green);
+  background: var(--green-bg);
+  display: inline-block;
+  padding: 0.1rem 0.5rem; border-radius: 4px;
+  font-size: 0.79rem; letter-spacing: 0.04em;
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.afp-val.show { opacity: 1; transform: none; }
+.afp-pending { color: var(--muted); font-size: 0.78rem; }
+
+.demo-cursor {
+  display: inline-block; width: 2px; height: 0.85em;
+  background: var(--accent); vertical-align: middle;
+  animation: blink .75s step-end infinite; margin-left: 1px;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── How it works ── */
+.section {
+  max-width: 1080px; margin: 0 auto;
+  padding: 4.5rem 2rem;
+}
+.section-label {
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); text-align: center; margin-bottom: 0.75rem;
+}
+.section h2 {
+  font-family: Georgia, serif;
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: normal; text-align: center;
+  text-wrap: balance; color: var(--text);
+  margin-bottom: 3rem;
+}
+.steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.5rem; }
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 1.75rem;
+  position: relative; overflow: hidden;
+}
+.step::before {
+  content: attr(data-n);
+  position: absolute; top: -0.5rem; right: 1rem;
+  font-family: Georgia, serif; font-size: 4rem;
+  color: var(--accent); opacity: 0.07;
+  line-height: 1; pointer-events: none;
+  font-weight: normal;
+}
+.step h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
+.step p { font-size: 0.85rem; color: var(--sub); line-height: 1.65; }
+
+/* ── Features ── */
+.features-wrap {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.features {
+  max-width: 1080px; margin: 0 auto;
+  padding: 3rem 2rem;
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 2rem;
+}
+.feat { display: flex; gap: 0.875rem; align-items: flex-start; }
+.feat-icon {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 8px; background: var(--accent-muted);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.feat h4 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
+.feat p { font-size: 0.8rem; color: var(--sub); line-height: 1.6; }
+
+/* ── CTA ── */
+.cta {
+  text-align: center; padding: 5rem 2rem 4rem;
+  max-width: 600px; margin: 0 auto;
+}
+.cta h2 {
+  font-family: Georgia, serif; font-weight: normal;
+  font-size: clamp(1.5rem, 2.5vw, 2rem); margin-bottom: 0.75rem;
+}
+.cta p { color: var(--sub); margin-bottom: 2rem; }
+.cta-meta { margin-top: 0.875rem; font-size: 0.77rem; color: var(--muted); }
+
+/* ── Footer ── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1.5rem 2rem; text-align: center;
+  font-size: 0.77rem; color: var(--muted);
+}
+
+/* ── Responsive ── */
+@media (max-width: 720px) {
+  .hero { grid-template-columns: 1fr; padding: 3rem 1.25rem; gap: 2.5rem; }
+  .steps, .features { grid-template-columns: 1fr; }
+  .section { padding: 3rem 1.25rem; }
+  nav { padding: 0.875rem 1.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afp-val { transition: none; }
+  .demo-cursor { animation: none; opacity: 1; }
+  .demo-progress-bar { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="#">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="9" y1="13" x2="15" y2="13"/>
+      <line x1="9" y1="17" x2="15" y2="17"/>
+    </svg>
+    AFP&nbsp;<span class="nav-brand-accent">Lookup</span>
+  </a>
+  <a class="btn" href="https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Descargar .exe
+  </a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div>
+    <p class="hero-eyebrow">Superintendencia de Pensiones · Automatización</p>
+    <h1>Consulta de AFP <em>sin</em> hacerlo una a una</h1>
+    <p class="hero-sub">
+      Sube tu Excel con RUTs y la app consulta spensiones.cl automáticamente,
+      completando la columna AFP&nbsp;2 por cada trabajador.
+    </p>
+    <a class="btn" href="https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe" style="font-size:1rem; padding:0.75rem 1.5rem;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Descargar para Windows
+    </a>
+    <p class="hero-meta">Windows 10 / 11 &nbsp;·&nbsp; Sin instalación técnica &nbsp;·&nbsp; Se actualiza sola</p>
+  </div>
+
+  <div class="demo-card">
+    <div class="demo-bar">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+      <span class="demo-filename">nomina_junio_2026.xlsx</span>
+    </div>
+    <div class="demo-progress"><div class="demo-progress-bar" id="progress-bar"></div></div>
+    <table class="demo-tbl">
+      <thead>
+        <tr>
+          <th>RUT</th>
+          <th>Nombre</th>
+          <th>AFP 2</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rut">15.800.185-3</td>
+          <td class="nombre">R. Escanilla</td>
+          <td><span class="afp-pending" id="p0">—</span><span class="afp-val" id="v0">HABITAT</span></td>
+        </tr>
+        <tr>
+          <td class="rut">12.345.678-9</td>
+          <td class="nombre">M. González</td>
+          <td><span class="afp-pending" id="p1">—</span><span class="afp-val" id="v1">PROVIDA</span></td>
+        </tr>
+        <tr>
+          <td class="rut">16.123.456-7</td>
+          <td class="nombre">P. Silva</td>
+          <td><span class="afp-pending" id="p2">—</span><span class="afp-val" id="v2">CAPITAL</span></td>
+        </tr>
+        <tr>
+          <td class="rut">14.987.654-3</td>
+          <td class="nombre">A. Ramírez</td>
+          <td><span class="afp-pending" id="p3">—</span><span class="afp-val" id="v3">CUPRUM</span></td>
+        </tr>
+        <tr>
+          <td class="rut">11.111.111-1</td>
+          <td class="nombre">J. Martínez</td>
+          <td><span class="afp-pending" id="p4">—</span><span class="afp-val" id="v4">PLANVITAL</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Steps -->
+<section class="section">
+  <p class="section-label">Cómo funciona</p>
+  <h2>Tres pasos, ninguna consulta manual</h2>
+  <div class="steps">
+    <div class="step" data-n="1">
+      <h3>Sube el Excel</h3>
+      <p>La app detecta automáticamente la columna de RUTs. Muestra cuántos encontró, cuántos ya tienen AFP 2 y si hay duplicados.</p>
+    </div>
+    <div class="step" data-n="2">
+      <h3>Procesamiento automático</h3>
+      <p>Consulta spensiones.cl uno a uno, omitiendo RUTs repetidos. Si hay más de 90 únicos, te guía para cambiar la IP entre lotes.</p>
+    </div>
+    <div class="step" data-n="3">
+      <h3>Descarga el resultado</h3>
+      <p>El mismo archivo con la columna AFP 2 completada. Si se corta a mitad, puedes retomar subiendo el mismo Excel.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<div class="features-wrap">
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+          <polyline points="17 6 23 6 23 12"/>
+        </svg>
+      </div>
+      <div>
+        <h4>Se actualiza sola</h4>
+        <p>Al abrir descarga la última versión del repositorio. Sin pasos manuales.</p>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div>
+        <h4>Corre en tu equipo</h4>
+        <p>Sin servidores compartidos. Cada computador tiene su propia cuota de consultas diarias.</p>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <h4>Sin instalación técnica</h4>
+        <p>Un solo .exe. Python y Chromium se instalan solos en la primera ejecución.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div class="cta">
+  <h2>Listo para empezar</h2>
+  <p>Descarga el instalador y tendrás la app funcionando en menos de 5 minutos.</p>
+  <a class="btn" href="https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe" style="font-size:1rem; padding:0.75rem 1.5rem;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Descargar AFPLookup.exe
+  </a>
+  <p class="cta-meta">Windows 10 / 11 &nbsp;·&nbsp; ~5 MB &nbsp;·&nbsp; Se actualiza automáticamente</p>
+</div>
+
+<footer>
+  AFP Lookup &nbsp;·&nbsp; Consulta automatizada Superintendencia de Pensiones
+</footer>
+
+<script>
+(function () {
+  const ROWS = 5;
+  const DELAY_FIRST = 900;
+  const DELAY_BETWEEN = 850;
+  const LOOP_PAUSE = 2800;
+
+  function reset() {
+    for (let i = 0; i < ROWS; i++) {
+      document.getElementById('p' + i).style.display = '';
+      document.getElementById('v' + i).classList.remove('show');
+    }
+    const bar = document.getElementById('progress-bar');
+    if (bar) bar.style.width = '0%';
+  }
+
+  function reveal(i) {
+    const pending = document.getElementById('p' + i);
+    const val = document.getElementById('v' + i);
+    const bar = document.getElementById('progress-bar');
+    if (!pending || !val) return;
+    pending.style.display = 'none';
+    val.classList.add('show');
+    if (bar) bar.style.width = ((i + 1) / ROWS * 100) + '%';
+  }
+
+  function runCycle() {
+    reset();
+    for (let i = 0; i < ROWS; i++) {
+      (function (idx) {
+        setTimeout(function () {
+          reveal(idx);
+          if (idx === ROWS - 1) {
+            setTimeout(function () { runCycle(); }, LOOP_PAUSE);
+          }
+        }, DELAY_FIRST + idx * DELAY_BETWEEN);
+      })(i);
+    }
+  }
+
+  runCycle();
+})();
+</script>
+</body>
+</html>
