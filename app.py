@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from playwright.sync_api import sync_playwright
@@ -10,6 +11,7 @@ st.set_page_config(page_title="RPA SUPERINTENDENCIA", page_icon="🔍", layout="
 
 _DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe"
 _BATCH_LIMIT = 90
+_IS_CLOUD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
 
 
 def _init_state() -> None:
@@ -145,10 +147,11 @@ def paso_descarga() -> None:
                 type="primary",
                 help="Proximamente disponible",
             )
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        if st.button("Continuar en el navegador", use_container_width=True):
-            st.session_state.paso = 1
-            st.rerun()
+        if not _IS_CLOUD:
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            if st.button("Continuar en el navegador", use_container_width=True):
+                st.session_state.paso = 1
+                st.rerun()
 
 
 def paso_subir() -> None:
@@ -446,6 +449,9 @@ def paso_descargar() -> None:
 
 
 _init_state()
+
+if _IS_CLOUD:
+    st.session_state.paso = 0
 
 paso = st.session_state.paso
 if paso == 0:
