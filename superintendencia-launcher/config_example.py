@@ -1,6 +1,7 @@
 # Copy this file to config.py before building the .exe.
-# Use a read-only fine-grained PAT with access to this private repo contents.
-GITHUB_TOKEN = "ghp_REPLACE_WITH_YOUR_TOKEN"
-GITHUB_OWNER = "REPLACE_WITH_GITHUB_USERNAME"
+# Public repos can leave this empty. Private repos need a read-only fine-grained
+# PAT with access to this repo contents.
+GITHUB_TOKEN = ""
+GITHUB_OWNER = "LuN4t1k0"
 GITHUB_REPO = "Superintendencia"
 GITHUB_BRANCH = "main"

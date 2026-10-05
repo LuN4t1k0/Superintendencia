@@ -16,10 +16,11 @@ APP_DIR = BASE_DIR / "app"
 VERSION_FILE = BASE_DIR / ".version"
 
 _HEADERS = {
-    "Authorization": f"Bearer {GITHUB_TOKEN}",
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
 }
+if GITHUB_TOKEN and "REPLACE_WITH" not in GITHUB_TOKEN:
+    _HEADERS["Authorization"] = f"Bearer {GITHUB_TOKEN}"
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
