@@ -8,6 +8,7 @@ from pathlib import Path
 BASE_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "AFPLookup"
 PYTHON_DIR = BASE_DIR / "python"
 PLAYWRIGHT_MARKER = BASE_DIR / ".playwright_done"
+INSTALL_LOG = BASE_DIR / "install.log"
 
 _PYTHON_VERSION = "3.12.9"
 _PYTHON_URL = (
@@ -16,6 +17,7 @@ _PYTHON_URL = (
 )
 _GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_PLAYWRIGHT_DOWNLOAD_TIMEOUT_MS = "600000"
 
 
 def is_python_ready() -> bool:
@@ -26,12 +28,23 @@ def is_playwright_ready() -> bool:
     return PLAYWRIGHT_MARKER.exists()
 
 
+def _write_install_log(label: str, command: list[str], output: str) -> None:
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    INSTALL_LOG.write_text(
+        f"{label}\n"
+        f"Comando: {' '.join(command)}\n\n"
+        f"{output or 'Sin salida adicional del comando.'}\n",
+        encoding="utf-8",
+    )
+
+
 def _format_command_error(label: str, command: list[str], exc: subprocess.CalledProcessError) -> str:
     output = "\n".join(
         part.strip()
         for part in (exc.stdout, exc.stderr)
         if part and part.strip()
     )
+    _write_install_log(label, command, output)
     if output:
         lines = output.splitlines()[-12:]
         output = "\n".join(lines)
@@ -41,11 +54,14 @@ def _format_command_error(label: str, command: list[str], exc: subprocess.Called
     return (
         f"{label} fallo con codigo {exc.returncode}.\n"
         f"Comando: {' '.join(command)}\n"
+        f"Log completo: {INSTALL_LOG}\n"
         f"Detalle:\n{output}"
     )
 
 
 def _run_checked(command: list[str], label: str) -> None:
+    env = os.environ.copy()
+    env.setdefault("PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT", _PLAYWRIGHT_DOWNLOAD_TIMEOUT_MS)
     try:
         subprocess.run(
             command,
@@ -53,6 +69,7 @@ def _run_checked(command: list[str], label: str) -> None:
             creationflags=_NO_WINDOW,
             capture_output=True,
             text=True,
+            env=env,
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(_format_command_error(label, command, exc)) from exc
@@ -132,7 +149,7 @@ def install_python(on_status=None) -> None:
 
 def install_playwright(on_status=None) -> None:
     if on_status:
-        on_status("Descargando Chromium (primera vez, ~300 MB)...")
+        on_status("Descargando Chromium (primera vez, puede tardar varios minutos)...")
     python_exe = PYTHON_DIR / "python.exe"
     playwright_exe = PYTHON_DIR / "Scripts" / "playwright.exe"
     module_command = [str(python_exe), "-m", "playwright", "install", "chromium"]
