@@ -26,6 +26,38 @@ def is_playwright_ready() -> bool:
     return PLAYWRIGHT_MARKER.exists()
 
 
+def _format_command_error(label: str, command: list[str], exc: subprocess.CalledProcessError) -> str:
+    output = "\n".join(
+        part.strip()
+        for part in (exc.stdout, exc.stderr)
+        if part and part.strip()
+    )
+    if output:
+        lines = output.splitlines()[-12:]
+        output = "\n".join(lines)
+    else:
+        output = "Sin salida adicional del comando."
+
+    return (
+        f"{label} fallo con codigo {exc.returncode}.\n"
+        f"Comando: {' '.join(command)}\n"
+        f"Detalle:\n{output}"
+    )
+
+
+def _run_checked(command: list[str], label: str) -> None:
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            creationflags=_NO_WINDOW,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(_format_command_error(label, command, exc)) from exc
+
+
 def ensure_desktop_shortcut(on_status=None) -> None:
     if not sys.platform.startswith("win"):
         return
@@ -101,10 +133,17 @@ def install_python(on_status=None) -> None:
 def install_playwright(on_status=None) -> None:
     if on_status:
         on_status("Descargando Chromium (primera vez, ~300 MB)...")
+    python_exe = PYTHON_DIR / "python.exe"
     playwright_exe = PYTHON_DIR / "Scripts" / "playwright.exe"
-    subprocess.run(
-        [str(playwright_exe), "install", "chromium"],
-        check=True,
-        creationflags=_NO_WINDOW,
-    )
+    module_command = [str(python_exe), "-m", "playwright", "install", "chromium"]
+    exe_command = [str(playwright_exe), "install", "chromium"]
+
+    try:
+        _run_checked(module_command, "La instalacion de Chromium con Playwright")
+    except RuntimeError as first_error:
+        try:
+            _run_checked(exe_command, "La instalacion de Chromium con playwright.exe")
+        except RuntimeError as second_error:
+            raise RuntimeError(f"{first_error}\n\nReintento:\n{second_error}") from second_error
+
     PLAYWRIGHT_MARKER.write_text("done")
