@@ -27,12 +27,12 @@ jobs:
       - name: Install build dependencies
         run: pip install pyinstaller requests
 
-      - name: Write config.py from secret
+      - name: Write public repo config.py
         working-directory: superintendencia-launcher
         shell: bash
         run: |
           cat > config.py << 'EOF'
-          GITHUB_TOKEN  = "${{ secrets.LAUNCHER_APP_REPO_TOKEN }}"
+          GITHUB_TOKEN  = ""
           GITHUB_OWNER  = "${{ github.repository_owner }}"
           GITHUB_REPO   = "${{ github.event.repository.name }}"
           GITHUB_BRANCH = "main"
