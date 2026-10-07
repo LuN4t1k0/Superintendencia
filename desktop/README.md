@@ -1,6 +1,6 @@
 # AFP Lookup Desktop
 
-Cliente Electron para uso interno. La app valida una licencia, muestra una interfaz React y ejecuta un motor Python interno para consultar y completar el Excel.
+Cliente Electron para uso interno. La app muestra una interfaz React y ejecuta un motor Python interno para consultar y completar el Excel.
 
 ## Desarrollo
 
@@ -16,11 +16,14 @@ Si `python3` no apunta al entorno correcto, usa:
 PYTHON_BIN=/ruta/a/python npm run dev
 ```
 
-## Licencias internas
+## Licencias internas opcionales
+
+Por defecto la app no exige licencia (`LICENSE_REQUIRED=false`) para facilitar distribucion interna. Si mas adelante quieres reactivar el bloqueo por licencia, compila con:
 
 Configura el endpoint con:
 
 ```bash
+LICENSE_REQUIRED=true
 APP_ID=afp-lookup
 LICENSE_SERVER_URL=https://licencias.interno.ejemplo
 ```
@@ -74,7 +77,7 @@ npm run pack
 
 El build final queda en `desktop/dist/`.
 
-`npm run pack` y `npm run dist` generan `src/config.generated.json` desde las variables de entorno. En produccion define `LICENSE_SERVER_URL` y `APP_ID` antes de construir para que la app empaquetada sepa donde validar licencias.
+`npm run pack` y `npm run dist` generan `src/config.generated.json` desde las variables de entorno. Por defecto la app empaquetada no exige licencia. Para activar validacion define `LICENSE_REQUIRED=true`, `LICENSE_SERVER_URL` y `APP_ID` antes de construir.
 
 ## Firma Authenticode Windows
 

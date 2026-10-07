@@ -17,6 +17,9 @@ function loadBuildConfig() {
 const buildConfig = loadBuildConfig();
 const APP_ID = process.env.APP_ID || buildConfig.appId || "afp-lookup";
 const LICENSE_SERVER_URL = process.env.LICENSE_SERVER_URL || buildConfig.licenseServerUrl || "";
+const LICENSE_REQUIRED = String(
+  process.env.LICENSE_REQUIRED ?? buildConfig.licenseRequired ?? "false"
+).toLowerCase() === "true";
 const LICENSE_OFFLINE_GRACE_DAYS = Number(
   process.env.LICENSE_OFFLINE_GRACE_DAYS || buildConfig.licenseOfflineGraceDays || "7"
 );
@@ -103,6 +106,10 @@ async function validateLicense(token) {
 }
 
 async function hasValidLicense() {
+  if (!LICENSE_REQUIRED) {
+    return true;
+  }
+
   const stored = readStoredLicense();
   if (!stored?.token) {
     return false;
