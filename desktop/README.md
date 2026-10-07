@@ -86,8 +86,8 @@ El build final queda en `desktop/dist/`.
 El workflow `.github/workflows/desktop-release.yml` construye Windows cuando se publica un tag:
 
 ```bash
-git tag desktop-v0.1.0
-git push origin desktop-v0.1.0
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 Secrets esperados:

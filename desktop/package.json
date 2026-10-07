@@ -81,7 +81,8 @@
       {
         "provider": "github",
         "owner": "LuN4t1k0",
-        "repo": "Superintendencia"
+        "repo": "Superintendencia",
+        "releaseType": "release"
       }
     ]
   }
