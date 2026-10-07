@@ -9,7 +9,7 @@ from bot.scraper import get_public_ip, normalize_rut, query_rut
 
 st.set_page_config(page_title="RPA SUPERINTENDENCIA", page_icon="🔍", layout="centered")
 
-_DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/launcher-latest/AFPLookup.exe"
+_DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/v0.1.2/AFP-Lookup-Setup-0.1.2.exe"
 _BATCH_LIMIT = 90
 _IS_CLOUD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
 
