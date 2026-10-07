@@ -33,6 +33,14 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      - name: Ensure GitHub release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" `
+            || gh release create "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --title "$env:RELEASE_TAG" --notes "Windows desktop release $env:RELEASE_TAG"
+
       - name: Build and publish desktop app
         working-directory: desktop
         env:
