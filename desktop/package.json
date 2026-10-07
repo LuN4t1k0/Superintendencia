@@ -1,0 +1,89 @@
+{
+  "name": "superintendencia-desktop",
+  "version": "0.1.2",
+  "description": "Cliente desktop interno para RPA Superintendencia.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build:config": "node scripts/write-build-config.js",
+    "build:ui": "vite build",
+    "prepare:runtime": "node scripts/prepare-python-runtime.js",
+    "preview": "vite preview",
+    "pack": "npm run build:config && npm run build:ui && electron-builder --dir",
+    "pack:full": "npm run build:config && npm run build:ui && npm run prepare:runtime && electron-builder --dir",
+    "dist": "npm run build:config && npm run build:ui && npm run prepare:runtime && electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "vite": "^7.1.7",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "cl.superintendencia.afp-lookup",
+    "productName": "AFP Lookup",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "dist-ui/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "app",
+        "filter": [
+          "app.py",
+          "bot/**",
+          "desktop_backend/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "ms-playwright",
+        "to": "ms-playwright",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "artifactName": "AFP-Lookup-Setup-${version}.${ext}",
+      "target": [
+        "nsis"
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LuN4t1k0",
+        "repo": "Superintendencia",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

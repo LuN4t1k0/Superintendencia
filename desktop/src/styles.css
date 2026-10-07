@@ -1,0 +1,276 @@
+:root {
+  color: #172033;
+  background: #f5f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 860px;
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  height: 42px;
+  border: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.shell {
+  width: min(1180px, calc(100vw - 48px));
+  margin: 0 auto;
+  padding: 34px 0 42px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #6c7486;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+h2 {
+  margin-bottom: 12px;
+  font-size: 17px;
+}
+
+.status {
+  border: 1px solid #d8deea;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: #4c566e;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.status.running {
+  border-color: #8aa7ff;
+  color: #2444a8;
+  background: #eef3ff;
+}
+
+.status.done {
+  border-color: #a8d5b1;
+  color: #23713b;
+  background: #effaf1;
+}
+
+.status.error {
+  border-color: #f0aea8;
+  color: #9e2a1e;
+  background: #fff1ef;
+}
+
+.workflow {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+}
+
+.panel,
+.progress-section,
+.log-panel {
+  border: 1px solid #dce2ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.panel-heading svg {
+  width: 34px;
+  height: 34px;
+  color: #3d63dd;
+}
+
+.panel-heading h2,
+.panel-heading p {
+  margin-bottom: 0;
+}
+
+.panel-heading p {
+  margin-top: 4px;
+  color: #697386;
+  word-break: break-all;
+}
+
+.settings-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.settings-panel h2 {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  color: #4d5668;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #cfd6e4;
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #172033;
+  background: #ffffff;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.primary {
+  background: #3157d5;
+  color: #ffffff;
+}
+
+.secondary,
+.icon-button {
+  border: 1px solid #d3dae8;
+  background: #ffffff;
+  color: #253047;
+}
+
+.icon-button {
+  width: 42px;
+  padding: 0;
+}
+
+.progress-section {
+  margin-bottom: 18px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  color: #4f586a;
+}
+
+.progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8ecf4;
+}
+
+.progress-track div {
+  height: 100%;
+  border-radius: inherit;
+  background: #3d63dd;
+  transition: width 180ms ease;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.metric {
+  border: 1px solid #dce2ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.metric span {
+  display: block;
+  color: #687284;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 28px;
+}
+
+.log-panel h2 {
+  margin-bottom: 10px;
+}
+
+.log-list {
+  height: 210px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #101828;
+  padding: 12px 14px;
+  color: #d8e1f0;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.log-list p {
+  margin: 0 0 6px;
+}
+
+.empty-log {
+  color: #98a2b3;
+}

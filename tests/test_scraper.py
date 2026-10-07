@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bot.scraper import extract_afp, get_public_ip, normalize_rut
+from bot.scraper import extract_afp, format_rut_for_portal, get_public_ip, normalize_rut
 
 
 def test_normalize_rut_con_puntos_y_guion():
@@ -21,6 +21,10 @@ def test_normalize_rut_ya_limpio():
 
 def test_normalize_rut_strips_espacios():
     assert normalize_rut("  15800185-3  ") == "158001853"
+
+
+def test_format_rut_for_portal():
+    assert format_rut_for_portal("15.800.185-3") == "15800185-3"
 
 
 def test_extract_afp_habitat():
