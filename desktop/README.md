@@ -66,6 +66,12 @@ npm run dist
 
 Antes de empaquetar, el script `prepare:runtime` crea `desktop/python-runtime` e instala Chromium en `desktop/ms-playwright`. Esos directorios se incluyen como recursos de Electron para que la app no dependa del Python instalado por el usuario.
 
+En Windows el runtime se arma con Python embeddable portable, no con un `venv`. Esto evita que el instalador quede apuntando al Python temporal de GitHub Actions (`C:\hostedtoolcache\...`). Si necesitas cambiar la version incluida:
+
+```bash
+PYTHON_EMBED_VERSION=3.12.10 npm run dist -- --win
+```
+
 Para updates reales, publicar releases versionados en GitHub y firmar los binarios de macOS/Windows. En produccion no conviene distribuir builds sin firma.
 
 ## Build local

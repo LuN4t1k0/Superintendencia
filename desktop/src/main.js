@@ -41,6 +41,8 @@ let mainWindow;
 let workerProcess;
 let cancelRequested = false;
 let autoUpdateInterval;
+let updatePromptOpen = false;
+let updateDownloadInProgress = false;
 
 function rendererRoot() {
   return path.join(__dirname, "..", "dist-ui");
@@ -197,11 +199,15 @@ function pythonCommand() {
 
   if (app.isPackaged) {
     const runtimeRoot = path.join(process.resourcesPath, "python-runtime");
-    const bundledPython = process.platform === "win32"
-      ? path.join(runtimeRoot, "Scripts", "python.exe")
-      : path.join(runtimeRoot, "bin", "python");
+    const candidates = process.platform === "win32"
+      ? [
+          path.join(runtimeRoot, "python.exe"),
+          path.join(runtimeRoot, "Scripts", "python.exe")
+        ]
+      : [path.join(runtimeRoot, "bin", "python")];
+    const bundledPython = candidates.find((candidate) => fs.existsSync(candidate));
 
-    if (fs.existsSync(bundledPython)) {
+    if (bundledPython) {
       return bundledPython;
     }
   }
@@ -265,19 +271,50 @@ function setupAutoUpdates() {
     return;
   }
 
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("checking-for-update", () => {
     sendUpdateEvent({ type: "checking", message: "Buscando actualizaciones..." });
   });
 
-  autoUpdater.on("update-available", (info) => {
+  autoUpdater.on("update-available", async (info) => {
     sendUpdateEvent({
       type: "available",
       version: info.version,
-      message: `Actualizacion ${info.version} disponible. Descargando...`
+      message: `Actualizacion ${info.version} disponible.`
     });
+
+    if (updatePromptOpen || updateDownloadInProgress || !mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    updatePromptOpen = true;
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Nueva version disponible",
+      message: `Hay una nueva version (${info.version}) disponible.`,
+      detail: "Puedes instalarla ahora o seguir usando esta version.",
+      buttons: ["Instalar", "Ahora no"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+    updatePromptOpen = false;
+
+    if (result.response === 0) {
+      updateDownloadInProgress = true;
+      sendUpdateEvent({
+        type: "downloading",
+        version: info.version,
+        message: `Descargando actualizacion ${info.version}...`
+      });
+      autoUpdater.downloadUpdate().catch((error) => {
+        updateDownloadInProgress = false;
+        console.error("No se pudo descargar la actualizacion:", error);
+        sendUpdateEvent({ type: "error", message: `Error de actualizacion: ${error.message}` });
+      });
+    }
   });
 
   autoUpdater.on("update-not-available", () => {
@@ -292,12 +329,32 @@ function setupAutoUpdates() {
     });
   });
 
-  autoUpdater.on("update-downloaded", (info) => {
+  autoUpdater.on("update-downloaded", async (info) => {
+    updateDownloadInProgress = false;
     sendUpdateEvent({
       type: "downloaded",
       version: info.version,
-      message: "Actualizacion descargada. Se instalara al cerrar la app."
+      message: "Actualizacion descargada."
     });
+
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Actualizacion lista",
+      message: `La version ${info.version} ya esta descargada.`,
+      detail: "Reinicia la aplicacion para instalarla.",
+      buttons: ["Reiniciar e instalar", "Luego"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    });
+
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
   });
 
   autoUpdater.on("error", (error) => {
