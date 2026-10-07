@@ -5,6 +5,16 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+desktop/node_modules/
+desktop/dist/
+desktop/build/
+desktop/release/
+desktop/dist-ui/
+desktop/python-runtime/
+desktop/ms-playwright/
+desktop/src/config.generated.json
+license_server/*.sqlite3
+license_server/*.db
 
 # Launcher secret — NEVER commit
 superintendencia-launcher/config.py
