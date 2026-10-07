@@ -2,9 +2,21 @@ const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { spawn } = require("child_process");
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true
+    }
+  }
+]);
 
 function loadBuildConfig() {
   try {
@@ -29,6 +41,31 @@ let mainWindow;
 let workerProcess;
 let cancelRequested = false;
 let autoUpdateInterval;
+
+function rendererRoot() {
+  return path.join(__dirname, "..", "dist-ui");
+}
+
+function registerRendererProtocol() {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  protocol.handle("app", (request) => {
+    const requestUrl = new URL(request.url);
+    const requestedPath = decodeURIComponent(requestUrl.pathname);
+    const relativePath = requestedPath === "/" ? "index.html" : requestedPath.replace(/^\/+/, "");
+    const filePath = path.normalize(path.join(rendererRoot(), relativePath));
+    const root = path.normalize(rendererRoot());
+    const relativeToRoot = path.relative(root, filePath);
+
+    if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+}
 
 function getDeviceId() {
   const source = [
@@ -215,7 +252,7 @@ async function showActivation() {
 async function showApp() {
   createWindow();
   if (app.isPackaged) {
-    await mainWindow.loadFile(path.join(__dirname, "..", "dist-ui", "index.html"));
+    await mainWindow.loadURL("app://renderer/index.html");
   } else {
     await mainWindow.loadURL(DEV_SERVER_URL);
   }
@@ -231,8 +268,41 @@ function setupAutoUpdates() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on("checking-for-update", () => {
+    sendUpdateEvent({ type: "checking", message: "Buscando actualizaciones..." });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    sendUpdateEvent({
+      type: "available",
+      version: info.version,
+      message: `Actualizacion ${info.version} disponible. Descargando...`
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    sendUpdateEvent({ type: "not-available", message: "Estas usando la ultima version." });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateEvent({
+      type: "downloading",
+      percent: progress.percent,
+      message: `Descargando actualizacion ${Math.round(progress.percent || 0)}%`
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    sendUpdateEvent({
+      type: "downloaded",
+      version: info.version,
+      message: "Actualizacion descargada. Se instalara al cerrar la app."
+    });
+  });
+
   autoUpdater.on("error", (error) => {
     console.error("autoUpdater error:", error);
+    sendUpdateEvent({ type: "error", message: `Error de actualizacion: ${error.message}` });
   });
 
   autoUpdater.checkForUpdatesAndNotify().catch((error) => {
@@ -245,6 +315,17 @@ function setupAutoUpdates() {
     });
   }, 4 * 60 * 60 * 1000);
 }
+
+function sendUpdateEvent(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:event", payload);
+  }
+}
+
+ipcMain.handle("app:getInfo", async () => ({
+  version: app.getVersion(),
+  packaged: app.isPackaged
+}));
 
 ipcMain.handle("license:activate", async (_event, token) => {
   const cleanToken = String(token || "").trim();
@@ -270,6 +351,7 @@ ipcMain.handle("license:activate", async (_event, token) => {
 
 app.whenReady().then(async () => {
   try {
+    registerRendererProtocol();
     if (await hasValidLicense()) {
       await showApp();
     } else {

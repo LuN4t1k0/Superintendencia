@@ -22,6 +22,8 @@ function App() {
   const [stats, setStats] = useState(initialStats);
   const [settings, setSettings] = useState({ batchSize: 3, pauseSeconds: 1.5 });
   const [outputPath, setOutputPath] = useState("");
+  const [appInfo, setAppInfo] = useState(null);
+  const [updateMessage, setUpdateMessage] = useState("");
 
   const progress = useMemo(() => {
     if (!stats.pendingRows) {
@@ -29,6 +31,13 @@ function App() {
     }
     return Math.min(100, Math.round((stats.processed / stats.pendingRows) * 100));
   }, [stats.pendingRows, stats.processed]);
+
+  useEffect(() => {
+    window.desktopApi.getAppInfo().then(setAppInfo).catch(() => {});
+    return window.desktopApi.onUpdateEvent((event) => {
+      setUpdateMessage(event.message || "");
+    });
+  }, []);
 
   useEffect(() => {
     return window.desktopApi.onProcessEvent((event) => {
@@ -159,6 +168,9 @@ function App() {
         <div>
           <p className="eyebrow">AFP Lookup</p>
           <h1>RPA Superintendencia</h1>
+          <p className="version-line">
+            Version {appInfo?.version || "..."}{updateMessage ? ` · ${updateMessage}` : ""}
+          </p>
         </div>
         <div className={`status ${status}`}>{labelForStatus(status)}</div>
       </section>
