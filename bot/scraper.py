@@ -5,10 +5,12 @@ from collections.abc import Callable
 
 from playwright.sync_api import Page
 
-_URL = "https://www.spensiones.cl/apps/certificados/formConsultaAfiliacion.php"
-_ACTION_URL = "consultaAfiliacion.php"
+_URL = "https://miportal.spensiones.gob.cl/tramitesServicios/ConsultaAfiliacion"
 _PAUSE = 1.5
 _AFP_RE = re.compile(r"incorporado\(a\) a AFP\s+([A-ZÁÉÍÓÚÑ]+)", re.IGNORECASE)
+_NOT_AFFILIATED_RE = re.compile(
+    r"no se encuentra incorporad[ao] a ninguna Administradora", re.IGNORECASE
+)
 
 
 def get_public_ip() -> str | None:
@@ -25,6 +27,14 @@ def normalize_rut(rut: str) -> str:
     return re.sub(r"[.\-]", "", rut.strip())
 
 
+def format_rut_for_portal(rut: str) -> str:
+    """Return a RUT without dots and with hyphen before the verifier digit."""
+    clean = normalize_rut(rut)
+    if len(clean) < 2:
+        return clean
+    return f"{clean[:-1]}-{clean[-1]}"
+
+
 def extract_afp(text: str) -> str | None:
     """Extract the AFP name from the result page text."""
     match = _AFP_RE.search(text)
@@ -33,7 +43,7 @@ def extract_afp(text: str) -> str | None:
 
 def _ensure_form_loaded(page: Page, log: Callable[[str], None] | None = None) -> None:
     try:
-        if page.locator("input[name='sessionid']").count() > 0:
+        if page.locator("input[placeholder*='33333333']").count() > 0:
             return
     except Exception:
         pass
@@ -48,42 +58,34 @@ def _query_once(page: Page, rut: str, log: Callable[[str], None] | None = None) 
     _ensure_form_loaded(page, log=log)
 
     if log:
-        log("Enviando POST directo desde contexto navegador")
+        log("Consultando en nuevo portal Mi Portal SP")
 
-    text = page.evaluate(
-        """async ({ actionUrl, rut }) => {
-            const sessionInput = document.querySelector("input[name='sessionid']");
-            if (!sessionInput) {
-                throw new Error("No se encontro sessionid en el formulario");
-            }
+    page.locator("input[placeholder*='33333333']").fill(format_rut_for_portal(rut))
+    page.locator("button").filter(has_text="BUSCAR").click(timeout=10_000)
 
-            const body = new URLSearchParams({
-                sessionid: sessionInput.value,
-                rut,
-                "g-recaptcha-response": "",
-            });
+    try:
+        page.wait_for_function(
+            """() => {
+                const text = document.body ? document.body.innerText : "";
+                return /se encuentra incorporado\\(a\\) a AFP|no se encuentra incorporada a ninguna Administradora|Error de validaci/i.test(text);
+            }""",
+            timeout=20_000,
+        )
+    except Exception:
+        pass
 
-            const response = await fetch(actionUrl, {
-                method: "POST",
-                headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                body,
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const html = await response.text();
-            const doc = new DOMParser().parseFromString(html, "text/html");
-            return doc.body ? doc.body.innerText : html;
-        }""",
-        {"actionUrl": _ACTION_URL, "rut": normalize_rut(rut)},
-    )
+    text = page.locator("body").inner_text(timeout=5_000)
+    if "Error de validación" in text or "ReCaptcha" in text:
+        raise RuntimeError("El portal rechazo la validacion reCAPTCHA.")
 
     if log:
         log("Leyendo respuesta")
     afp = extract_afp(text)
-    return afp if afp else "SIN DATOS"
+    if afp:
+        return afp
+    if _NOT_AFFILIATED_RE.search(text):
+        return "SIN DATOS"
+    raise RuntimeError("El portal no entrego un resultado reconocible.")
 
 
 def query_rut(
