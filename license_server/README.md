@@ -50,6 +50,16 @@ Variables esperadas en produccion:
 
 Postgres es la fuente de datos persistente. SQLite queda solo como fallback local para tests/desarrollo.
 
+La configuracion Railway vive en `.railway/railway.ts`. Antes de cambiar infraestructura:
+
+```bash
+cd license_server
+npm install
+railway config plan
+```
+
+Aplica cambios solo despues de revisar el plan.
+
 ## Administracion HTTP
 
 Los endpoints administrativos requieren:

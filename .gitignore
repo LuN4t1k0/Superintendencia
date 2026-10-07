@@ -13,6 +13,7 @@ desktop/dist-ui/
 desktop/python-runtime/
 desktop/ms-playwright/
 desktop/src/config.generated.json
+license_server/node_modules/
 license_server/*.sqlite3
 license_server/*.db
 

@@ -76,10 +76,34 @@ El build final queda en `desktop/dist/`.
 
 `npm run pack` y `npm run dist` generan `src/config.generated.json` desde las variables de entorno. En produccion define `LICENSE_SERVER_URL` y `APP_ID` antes de construir para que la app empaquetada sepa donde validar licencias.
 
-## Pendientes de credenciales Windows
+## Firma Authenticode Windows
 
-- Windows: certificado de firma Authenticode.
-- Updates: GitHub Actions usa `GITHUB_TOKEN` para publicar releases.
+El instalador Windows se puede publicar sin firma, pero SmartScreen mostrara advertencias fuertes hasta que exista reputacion de editor. Para produccion usa un certificado Authenticode OV o EV emitido por una CA reconocida.
+
+Flujo recomendado:
+
+```bash
+# Exportar el certificado a PFX desde Windows/macOS y convertirlo a base64
+base64 -i certificado.pfx | pbcopy
+```
+
+Luego carga estos secrets en GitHub Actions:
+
+- `WIN_CSC_LINK`: contenido base64 del `.pfx` o una URL privada al `.pfx`.
+- `WIN_CSC_KEY_PASSWORD`: password del `.pfx`.
+
+El workflow ya expone esos secrets a `electron-builder`. Cuando existen, `electron-builder` firma el instalador NSIS y los binarios Windows durante `npm run dist -- --win --publish always`.
+
+Notas practicas:
+
+- Un certificado EV suele reducir friccion de SmartScreen mas rapido, pero requiere token/hardware o proveedor compatible.
+- Un certificado OV tambien firma correctamente, pero la reputacion de SmartScreen se construye con descargas/uso.
+- Nunca commitear `.pfx`, passwords ni certificados privados al repo.
+
+## Pendientes de credenciales
+
+- GitHub Actions usa `GITHUB_TOKEN` para publicar releases.
+- Windows queda firmado automaticamente cuando existan `WIN_CSC_LINK` y `WIN_CSC_KEY_PASSWORD`.
 
 ## CI/CD
 
