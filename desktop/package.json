@@ -1,6 +1,6 @@
 {
   "name": "superintendencia-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Cliente desktop interno para RPA Superintendencia.",
   "main": "src/main.js",
   "private": true,
