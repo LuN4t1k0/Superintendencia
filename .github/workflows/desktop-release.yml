@@ -2,11 +2,23 @@ name: Desktop Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - ".github/workflows/desktop-release.yml"
+      - "app.py"
+      - "bot/**"
+      - "desktop/**"
+      - "desktop_backend/**"
+      - "requirements.txt"
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -16,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,11 +47,40 @@ jobs:
         working-directory: desktop
         run: npm ci
 
+      - name: Resolve release version
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+            $version = $tag.TrimStart("v")
+          } else {
+            $releaseJson = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 100 --json tagName
+            $latest = $releaseJson | node -e "const fs=require('fs'); const releases=JSON.parse(fs.readFileSync(0,'utf8')); const versions=releases.map(r=>/^v(\d+)\.(\d+)\.(\d+)$/.exec(r.tagName)).filter(Boolean).map(m=>m.slice(1).map(Number)).sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]).pop() || [0,1,0]; console.log(versions.join('.'));"
+            $parts = $latest.Split(".")
+            $version = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+            $tag = "v$version"
+          }
+
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "Resolved desktop release $tag"
+
+      - name: Apply release version
+        working-directory: desktop
+        run: npm version ${{ steps.release.outputs.version }} --no-git-tag-version
+
       - name: Ensure GitHub release exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$env:RELEASE_TAG" $env:GITHUB_SHA 2>$null || echo "Tag $env:RELEASE_TAG already exists"
+          git push origin "$env:RELEASE_TAG" 2>$null || echo "Tag $env:RELEASE_TAG already pushed"
           gh release view "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" `
             || gh release create "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --title "$env:RELEASE_TAG" --notes "Windows desktop release $env:RELEASE_TAG"
 
