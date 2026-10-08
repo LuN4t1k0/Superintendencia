@@ -10,6 +10,9 @@ build/
 desktop/node_modules/
 desktop/dist/
 desktop/build/
+!desktop/build/
+!desktop/build/icon.ico
+!desktop/build/icon.svg
 desktop/release/
 desktop/dist-ui/
 desktop/python-runtime/
