@@ -57,6 +57,34 @@ button svg {
   margin-bottom: 28px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-check-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  padding: 7px 4px;
+  color: #526078;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.update-check-button:hover:not(:disabled) {
+  color: #2444a8;
+  background: transparent;
+}
+
+.update-check-button svg {
+  width: 15px;
+  height: 15px;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #6c7486;
@@ -104,6 +132,12 @@ h2 {
   background: #eef3ff;
 }
 
+.status.waiting_ip {
+  border-color: #e4bd65;
+  color: #805b09;
+  background: #fff8e6;
+}
+
 .status.done {
   border-color: #a8d5b1;
   color: #23713b;
@@ -114,6 +148,89 @@ h2 {
   border-color: #f0aea8;
   color: #9e2a1e;
   background: #fff1ef;
+}
+
+.update-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  border: 1px solid #9db5ff;
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #f4f7ff 0%, #eef3ff 100%);
+  box-shadow: 0 8px 24px rgba(54, 83, 167, 0.1);
+}
+
+.update-notice.error {
+  border-color: #f0aea8;
+  background: #fff5f3;
+}
+
+.update-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #3158c8;
+  background: #dfe8ff;
+}
+
+.update-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.update-copy strong,
+.update-copy p {
+  margin: 0;
+}
+
+.update-copy p {
+  margin-top: 4px;
+  color: #526078;
+  font-size: 14px;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-progress {
+  overflow: hidden;
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #d9e2f7;
+}
+
+.update-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: #3d63dd;
+  transition: width 180ms ease;
+}
+
+.update-process-warning {
+  grid-column: 2 / -1;
+  margin: -4px 0 0;
+  color: #805b09;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workflow {

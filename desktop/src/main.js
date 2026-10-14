@@ -41,8 +41,9 @@ let mainWindow;
 let workerProcess;
 let cancelRequested = false;
 let autoUpdateInterval;
-let updatePromptOpen = false;
 let updateDownloadInProgress = false;
+let availableUpdateInfo = null;
+let downloadedUpdateInfo = null;
 
 function rendererRoot() {
   return path.join(__dirname, "..", "dist-ui");
@@ -279,45 +280,18 @@ function setupAutoUpdates() {
   });
 
   autoUpdater.on("update-available", async (info) => {
+    availableUpdateInfo = info;
+    downloadedUpdateInfo = null;
     sendUpdateEvent({
       type: "available",
       version: info.version,
       message: `Actualizacion ${info.version} disponible.`
     });
-
-    if (updatePromptOpen || updateDownloadInProgress || !mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
-
-    updatePromptOpen = true;
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Nueva version disponible",
-      message: `Hay una nueva version (${info.version}) disponible.`,
-      detail: "Puedes instalarla ahora o seguir usando esta version.",
-      buttons: ["Instalar", "Ahora no"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    });
-    updatePromptOpen = false;
-
-    if (result.response === 0) {
-      updateDownloadInProgress = true;
-      sendUpdateEvent({
-        type: "downloading",
-        version: info.version,
-        message: `Descargando actualizacion ${info.version}...`
-      });
-      autoUpdater.downloadUpdate().catch((error) => {
-        updateDownloadInProgress = false;
-        console.error("No se pudo descargar la actualizacion:", error);
-        sendUpdateEvent({ type: "error", message: `Error de actualizacion: ${error.message}` });
-      });
-    }
   });
 
   autoUpdater.on("update-not-available", () => {
+    availableUpdateInfo = null;
+    downloadedUpdateInfo = null;
     sendUpdateEvent({ type: "not-available", message: "Estas usando la ultima version." });
   });
 
@@ -331,43 +305,26 @@ function setupAutoUpdates() {
 
   autoUpdater.on("update-downloaded", async (info) => {
     updateDownloadInProgress = false;
+    downloadedUpdateInfo = info;
     sendUpdateEvent({
       type: "downloaded",
       version: info.version,
-      message: "Actualizacion descargada."
+      message: `Actualizacion ${info.version} lista para instalar.`
     });
-
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
-
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Actualizacion lista",
-      message: `La version ${info.version} ya esta descargada.`,
-      detail: "Reinicia la aplicacion para instalarla.",
-      buttons: ["Reiniciar e instalar", "Luego"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true
-    });
-
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall(false, true);
-    }
   });
 
   autoUpdater.on("error", (error) => {
+    updateDownloadInProgress = false;
     console.error("autoUpdater error:", error);
     sendUpdateEvent({ type: "error", message: `Error de actualizacion: ${error.message}` });
   });
 
-  autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+  autoUpdater.checkForUpdates().catch((error) => {
     console.error("No se pudo revisar actualizaciones:", error);
   });
 
   autoUpdateInterval = setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+    autoUpdater.checkForUpdates().catch((error) => {
       console.error("No se pudo revisar actualizaciones:", error);
     });
   }, 4 * 60 * 60 * 1000);
@@ -383,6 +340,62 @@ ipcMain.handle("app:getInfo", async () => ({
   version: app.getVersion(),
   packaged: app.isPackaged
 }));
+
+ipcMain.handle("update:check", async () => {
+  if (!app.isPackaged) {
+    return {
+      ok: false,
+      message: "La busqueda de actualizaciones solo esta disponible en la app instalada."
+    };
+  }
+
+  try {
+    await autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: `No se pudo buscar actualizaciones: ${error.message}` };
+  }
+});
+
+ipcMain.handle("update:download", async () => {
+  if (!availableUpdateInfo) {
+    return { ok: false, message: "No hay una actualizacion disponible para descargar." };
+  }
+  if (updateDownloadInProgress) {
+    return { ok: true };
+  }
+
+  updateDownloadInProgress = true;
+  sendUpdateEvent({
+    type: "downloading",
+    version: availableUpdateInfo.version,
+    percent: 0,
+    message: `Descargando actualizacion ${availableUpdateInfo.version}...`
+  });
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (error) {
+    updateDownloadInProgress = false;
+    sendUpdateEvent({ type: "error", message: `Error de actualizacion: ${error.message}` });
+    return { ok: false, message: `No se pudo descargar la actualizacion: ${error.message}` };
+  }
+});
+
+ipcMain.handle("update:install", async () => {
+  if (!downloadedUpdateInfo) {
+    return { ok: false, message: "La actualizacion aun no esta lista para instalar." };
+  }
+  if (workerProcess) {
+    return {
+      ok: false,
+      message: "Deten o termina el procesamiento antes de instalar la actualizacion."
+    };
+  }
+
+  setImmediate(() => autoUpdater.quitAndInstall(false, true));
+  return { ok: true };
+});
 
 ipcMain.handle("license:activate", async (_event, token) => {
   const cleanToken = String(token || "").trim();
@@ -559,7 +572,19 @@ ipcMain.handle("process:cancel", async () => {
   }
 
   cancelRequested = true;
+  if (!workerProcess.stdin.destroyed) {
+    workerProcess.stdin.write("cancel\n");
+  }
   workerProcess.kill();
+  return { ok: true };
+});
+
+ipcMain.handle("process:verifyIp", async () => {
+  if (!workerProcess || workerProcess.stdin.destroyed) {
+    return { ok: false, message: "No hay un proceso esperando una nueva IP." };
+  }
+
+  workerProcess.stdin.write("verify_ip\n");
   return { ok: true };
 });
 

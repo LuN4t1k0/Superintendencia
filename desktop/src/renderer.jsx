@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Download, FileSpreadsheet, Play, RotateCcw, Square, Upload } from "lucide-react";
+import {
+  CloudDownload,
+  Download,
+  FileSpreadsheet,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Square,
+  Upload,
+  X
+} from "lucide-react";
 import "./styles.css";
 
 const initialStats = {
@@ -23,7 +33,8 @@ function App() {
   const [settings, setSettings] = useState({ batchSize: 3, pauseSeconds: 1.5 });
   const [outputPath, setOutputPath] = useState("");
   const [appInfo, setAppInfo] = useState(null);
-  const [updateMessage, setUpdateMessage] = useState("");
+  const [updateState, setUpdateState] = useState({ type: "idle", message: "", percent: 0 });
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const progress = useMemo(() => {
     if (!stats.pendingRows) {
@@ -35,7 +46,14 @@ function App() {
   useEffect(() => {
     window.desktopApi.getAppInfo().then(setAppInfo).catch(() => {});
     return window.desktopApi.onUpdateEvent((event) => {
-      setUpdateMessage(event.message || "");
+      setUpdateState((current) => ({
+        ...current,
+        ...event,
+        percent: event.percent ?? current.percent ?? 0
+      }));
+      if (["available", "downloading", "downloaded", "error"].includes(event.type)) {
+        setUpdateDismissed(false);
+      }
     });
   }, []);
 
@@ -74,9 +92,20 @@ function App() {
       }
 
       if (event.type === "ip_limit") {
-        setStatus("done");
+        setStatus("waiting_ip");
         setOutputPath(event.outputPath);
-        setMessage("Limite por IP alcanzado. Guarda el avance, cambia la IP y vuelve a procesar ese archivo.");
+        setMessage(
+          `Limite de ${event.batchLimit || 90} consultas alcanzado. Reinicia el router y verifica la nueva IP.`
+        );
+      }
+
+      if (event.type === "ip_check") {
+        setMessage(event.message);
+      }
+
+      if (event.type === "ip_changed") {
+        setStatus("running");
+        setMessage(event.message);
       }
 
       if (event.type === "blocked") {
@@ -143,10 +172,42 @@ function App() {
     setMessage("Proceso detenido.");
   }
 
+  async function verifyIp() {
+    setMessage("Verificando la IP publica...");
+    const result = await window.desktopApi.verifyIp();
+    if (!result.ok) {
+      setStatus("error");
+      setMessage(result.message);
+    }
+  }
+
   async function saveResult() {
     const result = await window.desktopApi.saveResult(outputPath);
     if (result.ok) {
       setMessage(`Resultado guardado en ${result.filePath}`);
+    }
+  }
+
+  async function checkForUpdates() {
+    setUpdateDismissed(false);
+    setUpdateState({ type: "checking", message: "Buscando actualizaciones...", percent: 0 });
+    const result = await window.desktopApi.checkForUpdates();
+    if (!result.ok) {
+      setUpdateState({ type: "error", message: result.message, percent: 0 });
+    }
+  }
+
+  async function downloadUpdate() {
+    const result = await window.desktopApi.downloadUpdate();
+    if (!result.ok) {
+      setUpdateState((current) => ({ ...current, type: "error", message: result.message }));
+    }
+  }
+
+  async function installUpdate() {
+    const result = await window.desktopApi.installUpdate();
+    if (!result.ok) {
+      setUpdateState((current) => ({ ...current, type: "error", message: result.message }));
     }
   }
 
@@ -159,7 +220,9 @@ function App() {
   }
 
   const isRunning = status === "running";
-  const canStart = filePath && !isRunning;
+  const isWaitingForIp = status === "waiting_ip";
+  const isProcessActive = isRunning || isWaitingForIp;
+  const canStart = filePath && !isProcessActive;
   const canSave = outputPath && !isRunning;
 
   return (
@@ -169,11 +232,34 @@ function App() {
           <p className="eyebrow">AFP Lookup</p>
           <h1>RPA Superintendencia</h1>
           <p className="version-line">
-            Version {appInfo?.version || "..."}{updateMessage ? ` · ${updateMessage}` : ""}
+            Version {appInfo?.version || "..."}
           </p>
         </div>
-        <div className={`status ${status}`}>{labelForStatus(status)}</div>
+        <div className="topbar-actions">
+          {appInfo?.packaged && (
+            <button
+              className="update-check-button"
+              type="button"
+              onClick={checkForUpdates}
+              disabled={updateState.type === "checking" || updateState.type === "downloading"}
+            >
+              <RefreshCw aria-hidden="true" />
+              Buscar actualizacion
+            </button>
+          )}
+          <div className={`status ${status}`}>{labelForStatus(status)}</div>
+        </div>
       </section>
+
+      {shouldShowUpdate(updateState, updateDismissed) && (
+        <UpdateNotice
+          update={updateState}
+          processActive={isProcessActive}
+          onDownload={downloadUpdate}
+          onInstall={installUpdate}
+          onDismiss={() => setUpdateDismissed(true)}
+        />
+      )}
 
       <section className="workflow">
         <div className="panel upload-panel">
@@ -184,7 +270,12 @@ function App() {
               <p>{filePath ? filePath.split(/[\\/]/).pop() : "Ningun archivo seleccionado"}</p>
             </div>
           </div>
-          <button className="secondary" type="button" onClick={selectFile} disabled={isRunning}>
+          <button
+            className="secondary"
+            type="button"
+            onClick={selectFile}
+            disabled={isProcessActive}
+          >
             <Upload aria-hidden="true" />
             Seleccionar Excel
           </button>
@@ -199,7 +290,7 @@ function App() {
               min="1"
               max="10"
               value={settings.batchSize}
-              disabled={isRunning}
+              disabled={isProcessActive}
               onChange={(event) =>
                 setSettings((current) => ({ ...current, batchSize: Number(event.target.value) }))
               }
@@ -213,7 +304,7 @@ function App() {
               max="5"
               step="0.25"
               value={settings.pauseSeconds}
-              disabled={isRunning}
+              disabled={isProcessActive}
               onChange={(event) =>
                 setSettings((current) => ({ ...current, pauseSeconds: Number(event.target.value) }))
               }
@@ -227,7 +318,17 @@ function App() {
           <Play aria-hidden="true" />
           Iniciar consulta
         </button>
-        <button className="secondary" type="button" onClick={cancelProcess} disabled={!isRunning}>
+        {isWaitingForIp && (
+          <button className="primary" type="button" onClick={verifyIp}>
+            Verificar nueva IP
+          </button>
+        )}
+        <button
+          className="secondary"
+          type="button"
+          onClick={cancelProcess}
+          disabled={!isProcessActive}
+        >
           <Square aria-hidden="true" />
           Detener
         </button>
@@ -235,7 +336,13 @@ function App() {
           <Download aria-hidden="true" />
           Guardar Excel
         </button>
-        <button className="icon-button" type="button" onClick={reset} disabled={isRunning} title="Reiniciar">
+        <button
+          className="icon-button"
+          type="button"
+          onClick={reset}
+          disabled={isProcessActive}
+          title="Reiniciar"
+        >
           <RotateCcw aria-hidden="true" />
         </button>
       </section>
@@ -284,6 +391,85 @@ function Metric({ label, value }) {
   );
 }
 
+function UpdateNotice({ update, processActive, onDownload, onInstall, onDismiss }) {
+  const isDownloading = update.type === "downloading";
+  const isChecking = update.type === "checking";
+  const isBusy = isDownloading || isChecking;
+  const isReady = update.type === "downloaded";
+
+  return (
+    <section className={`update-notice ${update.type}`} aria-live="polite">
+      <div className="update-icon">
+        {isBusy ? (
+          <RefreshCw className="spin" aria-hidden="true" />
+        ) : (
+          <CloudDownload aria-hidden="true" />
+        )}
+      </div>
+      <div className="update-copy">
+        <strong>{updateTitle(update)}</strong>
+        <p>{update.message}</p>
+        {isDownloading && (
+          <div
+            className="update-progress"
+            aria-label={`Descarga ${Math.round(update.percent || 0)}%`}
+          >
+            <div style={{ width: `${Math.min(100, update.percent || 0)}%` }} />
+          </div>
+        )}
+      </div>
+      <div className="update-actions">
+        {update.type === "available" && (
+          <button className="primary" type="button" onClick={onDownload}>
+            Descargar
+          </button>
+        )}
+        {isReady && (
+          <button className="primary" type="button" onClick={onInstall} disabled={processActive}>
+            Reiniciar e instalar
+          </button>
+        )}
+        {!isBusy && (
+          <button className="icon-button" type="button" onClick={onDismiss} title="Ocultar aviso">
+            <X aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {isReady && processActive && (
+        <p className="update-process-warning">Termina o detiene el procesamiento para instalar.</p>
+      )}
+    </section>
+  );
+}
+
+function shouldShowUpdate(update, dismissed) {
+  if (dismissed) {
+    return false;
+  }
+  return ["checking", "available", "downloading", "downloaded", "not-available", "error"].includes(
+    update.type
+  );
+}
+
+function updateTitle(update) {
+  if (update.type === "checking") {
+    return "Buscando actualizaciones";
+  }
+  if (update.type === "available") {
+    return `Nueva version ${update.version || ""}`.trim();
+  }
+  if (update.type === "downloading") {
+    return `Descargando ${Math.round(update.percent || 0)}%`;
+  }
+  if (update.type === "downloaded") {
+    return "Actualizacion lista";
+  }
+  if (update.type === "not-available") {
+    return "Aplicacion actualizada";
+  }
+  return "No se pudo actualizar";
+}
+
 function labelForStatus(status) {
   if (status === "running") {
     return "Procesando";
@@ -293,6 +479,9 @@ function labelForStatus(status) {
   }
   if (status === "error") {
     return "Error";
+  }
+  if (status === "waiting_ip") {
+    return "Esperando nueva IP";
   }
   return "Preparado";
 }

@@ -47,6 +47,45 @@ def save_output(wb, output_path: Path) -> None:
     output_path.write_bytes(to_bytes(wb))
 
 
+def wait_for_ip_change(previous_ip: str | None) -> str | None:
+    """Wait for renderer verification requests until a new public IP is available."""
+    while not STOP_REQUESTED:
+        command = sys.stdin.readline()
+        if not command:
+            return None
+        if command.strip() != "verify_ip":
+            continue
+
+        current_ip = get_public_ip()
+        if not current_ip:
+            emit(
+                "ip_check",
+                changed=False,
+                currentIp=None,
+                message="No se pudo detectar la IP publica. Revisa la conexion e intenta nuevamente.",
+            )
+            continue
+
+        if previous_ip and current_ip == previous_ip:
+            emit(
+                "ip_check",
+                changed=False,
+                currentIp=current_ip,
+                message="La IP publica todavia no ha cambiado. Reinicia el router e intenta nuevamente.",
+            )
+            continue
+
+        emit(
+            "ip_changed",
+            previousIp=previous_ip,
+            currentIp=current_ip,
+            message="Nueva IP detectada. Continuando automaticamente.",
+        )
+        return current_ip
+
+    return None
+
+
 def main() -> int:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
@@ -104,11 +143,6 @@ def main() -> int:
                     emit("canceled", outputPath=str(output_path))
                     return 0
 
-                if queries_this_ip >= BATCH_LIMIT:
-                    save_output(wb, output_path)
-                    emit("ip_limit", outputPath=str(output_path))
-                    return 0
-
                 rut = str(ws.cell(row, rut_col).value)
                 cache_key = normalize_rut(rut).upper()
 
@@ -117,6 +151,33 @@ def main() -> int:
                     stats["cacheHits"] += 1
                     log(f"RUT {rut} reutilizado desde cache: {afp}")
                 else:
+                    if queries_this_ip >= BATCH_LIMIT:
+                        save_output(wb, output_path)
+                        log(f"Limite de {BATCH_LIMIT} consultas por IP alcanzado. Esperando nueva IP.")
+                        emit(
+                            "ip_limit",
+                            outputPath=str(output_path),
+                            previousIp=current_ip,
+                            processed=processed,
+                            pendingRows=len(pending_rows),
+                            batchLimit=BATCH_LIMIT,
+                        )
+                        if browser is not None:
+                            browser.close()
+                            browser = None
+
+                        new_ip = wait_for_ip_change(current_ip)
+                        if new_ip is None:
+                            save_output(wb, output_path)
+                            emit("canceled", outputPath=str(output_path))
+                            return 0
+
+                        current_ip = new_ip
+                        queries_this_ip = 0
+                        log(f"IP cambiada. Reanudando desde la fila pendiente {processed + 1}.")
+                        browser = pw.chromium.launch(headless=True)
+                        page = browser.new_page()
+
                     log(f"Consultando RUT {rut}")
                     afp = query_rut(
                         page,

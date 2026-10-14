@@ -6,9 +6,13 @@ contextBridge.exposeInMainWorld("licenseApi", {
 
 contextBridge.exposeInMainWorld("desktopApi", {
   getAppInfo: () => ipcRenderer.invoke("app:getInfo"),
+  checkForUpdates: () => ipcRenderer.invoke("update:check"),
+  downloadUpdate: () => ipcRenderer.invoke("update:download"),
+  installUpdate: () => ipcRenderer.invoke("update:install"),
   selectFile: () => ipcRenderer.invoke("file:select"),
   saveResult: (sourcePath) => ipcRenderer.invoke("file:saveResult", sourcePath),
   startProcess: (options) => ipcRenderer.invoke("process:start", options),
+  verifyIp: () => ipcRenderer.invoke("process:verifyIp"),
   cancelProcess: () => ipcRenderer.invoke("process:cancel"),
   onUpdateEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
