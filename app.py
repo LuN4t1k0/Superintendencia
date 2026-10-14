@@ -5,12 +5,14 @@ from playwright.sync_api import sync_playwright
 import streamlit as st
 
 from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
-from bot.scraper import get_public_ip, normalize_rut, query_rut
+from bot.scraper import PortalBlockedError, get_public_ip, normalize_rut, query_rut
 
 st.set_page_config(page_title="RPA SUPERINTENDENCIA", page_icon="🔍", layout="centered")
 
 _DOWNLOAD_URL = "https://github.com/LuN4t1k0/Superintendencia/releases/download/v0.1.4/AFP-Lookup-Setup-0.1.4.exe"
-_BATCH_LIMIT = 90
+_SOFT_CHECKPOINT_INTERVAL = 90
+_CHECKPOINT_PAUSE_INCREMENT = 0.5
+_MAX_PAUSE_SECONDS = 5.0
 _IS_CLOUD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
 
 
@@ -40,6 +42,7 @@ def _init_state() -> None:
         "ip_at_start": None,
         "awaiting_ip_change": False,
         "queries_this_ip": 0,
+        "block_reason": None,
     }.items():
         if key not in st.session_state:
             st.session_state[key] = default
@@ -183,12 +186,10 @@ def paso_subir() -> None:
     col2.metric("RUTs únicos pendientes", unique_ruts)
     col3.metric("Ya procesados", already_done)
 
-    if unique_ruts > _BATCH_LIMIT:
-        batches = (unique_ruts + _BATCH_LIMIT - 1) // _BATCH_LIMIT
-        st.warning(
-            f"Se necesitan {batches} lotes de {_BATCH_LIMIT} consultas. "
-            f"Deberás reiniciar tu router {batches - 1} "
-            f"{'vez' if batches == 2 else 'veces'} durante el proceso."
+    if unique_ruts > _SOFT_CHECKPOINT_INTERVAL:
+        st.info(
+            f"La app guardará un punto de control cada {_SOFT_CHECKPOINT_INTERVAL} consultas "
+            "y continuará automáticamente mientras el portal responda correctamente."
         )
 
     if not pending_rows:
@@ -240,6 +241,7 @@ def paso_subir() -> None:
         st.session_state.ip_at_start = None
         st.session_state.awaiting_ip_change = False
         st.session_state.queries_this_ip = 0
+        st.session_state.block_reason = None
         _log(
             f"Iniciando: {len(pending_rows)} filas pendientes, "
             f"{unique_ruts} RUTs únicos, lote {int(batch_size)}, "
@@ -250,6 +252,8 @@ def paso_subir() -> None:
 
 
 def _render_waiting_ip() -> None:
+    if st.session_state.block_reason:
+        st.warning(st.session_state.block_reason)
     st.markdown("#### Para continuar:")
     st.markdown(
         "1. Reinicia tu router (desconéctalo 30 segundos y vuelve a conectarlo)\n"
@@ -274,6 +278,7 @@ def _render_waiting_ip() -> None:
             st.session_state.awaiting_ip_change = False
             st.session_state.ip_at_start = current_ip
             st.session_state.queries_this_ip = 0
+            st.session_state.block_reason = None
             _log(f"IP cambiada: {ip_anterior} → {current_ip}. Continuando.")
             st.rerun()
     else:
@@ -295,7 +300,7 @@ def paso_procesando() -> None:
     _barra_pasos(2)
 
     if st.session_state.awaiting_ip_change:
-        st.title("Límite de consultas alcanzado")
+        st.title("El portal bloqueó temporalmente las consultas")
         _render_waiting_ip()
         return
 
@@ -349,7 +354,7 @@ def paso_procesando() -> None:
     st.caption(
         f"Consultas al sitio: {st.session_state.remote_queries} | "
         f"Reutilizados por cache: {st.session_state.cache_hits} | "
-        f"Esta IP: {st.session_state.queries_this_ip}/{_BATCH_LIMIT}"
+        f"Consultas con esta IP: {st.session_state.queries_this_ip}"
     )
     secs_restantes = int((total - idx) * (pause_seconds + 1.0))
     if secs_restantes > 0:
@@ -376,22 +381,38 @@ def paso_procesando() -> None:
                 st.session_state.cache_hits += 1
                 _log(f"RUT {rut} (fila {row}) reutilizado desde cache: {afp}")
             else:
-                if st.session_state.queries_this_ip >= _BATCH_LIMIT:
-                    _log(f"Límite de {_BATCH_LIMIT} consultas por IP alcanzado. Pausando.")
-                    st.session_state.awaiting_ip_change = True
-                    _close_browser()
-                    st.rerun()
-
                 _log(f"Consultando RUT {rut} (fila {row})")
-                afp = query_rut(
-                    page,
-                    rut,
-                    pause_seconds=pause_seconds,
-                    log=lambda msg, rut=rut: _log(f"{rut}: {msg}"),
-                )
                 st.session_state.remote_queries += 1
                 st.session_state.queries_this_ip += 1
+                checkpoints = (
+                    (st.session_state.queries_this_ip - 1) // _SOFT_CHECKPOINT_INTERVAL
+                )
+                effective_pause = min(
+                    _MAX_PAUSE_SECONDS,
+                    pause_seconds + checkpoints * _CHECKPOINT_PAUSE_INCREMENT,
+                )
+                try:
+                    afp = query_rut(
+                        page,
+                        rut,
+                        pause_seconds=effective_pause,
+                        log=lambda msg, rut=rut: _log(f"{rut}: {msg}"),
+                    )
+                except PortalBlockedError as exc:
+                    st.session_state.block_reason = str(exc)
+                    st.session_state.awaiting_ip_change = True
+                    _log(f"Señal real de bloqueo detectada: {exc}")
+                    _close_browser()
+                    st.rerun()
                 afp_cache[cache_key] = afp
+
+                if (
+                    st.session_state.queries_this_ip % _SOFT_CHECKPOINT_INTERVAL == 0
+                ):
+                    _log(
+                        f"Punto de control: {st.session_state.queries_this_ip} consultas "
+                        f"sin bloqueo. Continuando con pausa de {effective_pause:.2f}s."
+                    )
 
             write_afp(ws, row, afp2_col, afp)
             st.session_state.current_idx += 1

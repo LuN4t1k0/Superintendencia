@@ -2,6 +2,7 @@ import argparse
 import json
 import signal
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -12,10 +13,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
-from bot.scraper import get_public_ip, normalize_rut, query_rut
+from bot.scraper import PortalBlockedError, get_public_ip, normalize_rut, query_rut
 
-BATCH_LIMIT = 90
-MAX_CONSECUTIVE_ERRORS = 5
+SOFT_CHECKPOINT_INTERVAL = 90
+CHECKPOINT_PAUSE_INCREMENT = 0.5
+MAX_PAUSE_SECONDS = 5.0
+BLOCK_RETRY_DELAYS = (30, 60)
+MAX_CONSECUTIVE_ERRORS = 3
 STOP_REQUESTED = False
 
 
@@ -45,6 +49,20 @@ def request_stop(_signum, _frame) -> None:
 def save_output(wb, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(to_bytes(wb))
+
+
+def adaptive_pause_seconds(base_pause: float, remote_queries: int) -> float:
+    """Increase the pause after each soft checkpoint without forcing an IP change."""
+    checkpoints = max(0, remote_queries // SOFT_CHECKPOINT_INTERVAL)
+    return min(MAX_PAUSE_SECONDS, base_pause + checkpoints * CHECKPOINT_PAUSE_INCREMENT)
+
+
+def wait_interruptibly(seconds: float) -> bool:
+    """Wait for a cooldown while still honoring stop signals."""
+    deadline = time.monotonic() + max(0.0, seconds)
+    while not STOP_REQUESTED and time.monotonic() < deadline:
+        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+    return not STOP_REQUESTED
 
 
 def wait_for_ip_change(previous_ip: str | None) -> str | None:
@@ -145,48 +163,80 @@ def main() -> int:
 
                 rut = str(ws.cell(row, rut_col).value)
                 cache_key = normalize_rut(rut).upper()
+                made_remote_query = False
 
                 if cache_key in afp_cache:
                     afp = afp_cache[cache_key]
                     stats["cacheHits"] += 1
                     log(f"RUT {rut} reutilizado desde cache: {afp}")
                 else:
-                    if queries_this_ip >= BATCH_LIMIT:
-                        save_output(wb, output_path)
-                        log(f"Limite de {BATCH_LIMIT} consultas por IP alcanzado. Esperando nueva IP.")
-                        emit(
-                            "ip_limit",
-                            outputPath=str(output_path),
-                            previousIp=current_ip,
-                            processed=processed,
-                            pendingRows=len(pending_rows),
-                            batchLimit=BATCH_LIMIT,
-                        )
-                        if browser is not None:
-                            browser.close()
-                            browser = None
-
-                        new_ip = wait_for_ip_change(current_ip)
-                        if new_ip is None:
+                    block_retries = 0
+                    while True:
+                        effective_pause = adaptive_pause_seconds(pause_seconds, queries_this_ip)
+                        log(f"Consultando RUT {rut}")
+                        stats["remoteQueries"] += 1
+                        queries_this_ip += 1
+                        made_remote_query = True
+                        try:
+                            afp = query_rut(
+                                page,
+                                rut,
+                                pause_seconds=effective_pause,
+                                log=lambda msg, rut=rut: log(f"{rut}: {msg}"),
+                            )
+                            break
+                        except PortalBlockedError as exc:
                             save_output(wb, output_path)
-                            emit("canceled", outputPath=str(output_path))
-                            return 0
+                            reason = str(exc)
 
-                        current_ip = new_ip
-                        queries_this_ip = 0
-                        log(f"IP cambiada. Reanudando desde la fila pendiente {processed + 1}.")
-                        browser = pw.chromium.launch(headless=True)
-                        page = browser.new_page()
+                            if block_retries < len(BLOCK_RETRY_DELAYS):
+                                wait_seconds = BLOCK_RETRY_DELAYS[block_retries]
+                                block_retries += 1
+                                log(
+                                    f"Señal de bloqueo detectada. Pausa preventiva de "
+                                    f"{wait_seconds} segundos antes de una consulta de verificacion."
+                                )
+                                emit(
+                                    "cooldown",
+                                    outputPath=str(output_path),
+                                    reason=reason,
+                                    waitSeconds=wait_seconds,
+                                    attempt=block_retries,
+                                    maxAttempts=len(BLOCK_RETRY_DELAYS),
+                                )
+                                if not wait_interruptibly(wait_seconds):
+                                    save_output(wb, output_path)
+                                    emit("canceled", outputPath=str(output_path))
+                                    return 0
+                                continue
 
-                    log(f"Consultando RUT {rut}")
-                    afp = query_rut(
-                        page,
-                        rut,
-                        pause_seconds=pause_seconds,
-                        log=lambda msg, rut=rut: log(f"{rut}: {msg}"),
-                    )
-                    stats["remoteQueries"] += 1
-                    queries_this_ip += 1
+                            log("El bloqueo persistio despues de las pausas. Esperando nueva IP.")
+                            emit(
+                                "portal_blocked",
+                                outputPath=str(output_path),
+                                previousIp=current_ip,
+                                processed=processed,
+                                pendingRows=len(pending_rows),
+                                reason=reason,
+                            )
+                            if browser is not None:
+                                browser.close()
+                                browser = None
+
+                            new_ip = wait_for_ip_change(current_ip)
+                            if new_ip is None:
+                                save_output(wb, output_path)
+                                emit("canceled", outputPath=str(output_path))
+                                return 0
+
+                            current_ip = new_ip
+                            queries_this_ip = 0
+                            block_retries = 0
+                            consecutive_errors = 0
+                            log(f"IP cambiada. Reanudando desde la fila pendiente {processed + 1}.")
+                            browser = pw.chromium.launch(headless=True)
+                            page = browser.new_page()
+
                     afp_cache[cache_key] = afp
 
                 if afp == "ERROR":
@@ -208,6 +258,24 @@ def main() -> int:
                     pendingRows=len(pending_rows),
                     **stats,
                 )
+
+                if (
+                    made_remote_query
+                    and queries_this_ip > 0
+                    and queries_this_ip % SOFT_CHECKPOINT_INTERVAL == 0
+                ):
+                    save_output(wb, output_path)
+                    next_pause = adaptive_pause_seconds(pause_seconds, queries_this_ip)
+                    log(
+                        f"Punto de control: {queries_this_ip} consultas con esta IP, "
+                        f"sin bloqueo. Continuando con pausa de {next_pause:.2f}s."
+                    )
+                    emit(
+                        "checkpoint",
+                        outputPath=str(output_path),
+                        queriesThisIp=queries_this_ip,
+                        pauseSeconds=next_pause,
+                    )
 
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                     save_output(wb, output_path)

@@ -11,6 +11,49 @@ _AFP_RE = re.compile(r"incorporado\(a\) a AFP\s+([A-ZÁÉÍÓÚÑ]+)", re.IGNORE
 _NOT_AFFILIATED_RE = re.compile(
     r"no se encuentra incorporad[ao] a ninguna Administradora", re.IGNORECASE
 )
+_BLOCKED_TEXT_RE = re.compile(
+    r"(?:"
+    r"error\s+de\s+validaci[oó]n|recaptcha|demasiadas\s+(?:solicitudes|consultas)|"
+    r"too\s+many\s+requests|acceso\s+(?:temporalmente\s+)?bloqueado|"
+    r"intente\s+(?:nuevamente\s+)?m[aá]s\s+tarde|rate\s*limit"
+    r")",
+    re.IGNORECASE,
+)
+_BLOCKING_HTTP_STATUSES = {403, 429}
+
+
+class PortalBlockedError(RuntimeError):
+    """Raised when the portal explicitly rejects or throttles a query."""
+
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def detect_block_reason(text: str, http_statuses: list[int] | None = None) -> str | None:
+    """Return a human-readable reason when a portal response indicates blocking."""
+    statuses = http_statuses or []
+    for status in statuses:
+        if status in _BLOCKING_HTTP_STATUSES:
+            return f"El portal rechazo la consulta con codigo HTTP {status}."
+
+    match = _BLOCKED_TEXT_RE.search(text or "")
+    if match:
+        return f"El portal mostro una señal de bloqueo: {match.group(0)}."
+    return None
+
+
+def _is_query_response(response) -> bool:
+    """Limit status inspection to calls made by the consultation portal or its API."""
+    try:
+        url = response.url.lower()
+        resource_type = response.request.resource_type
+    except Exception:
+        return False
+    is_portal_url = (
+        "spensiones.gob.cl" in url or "execute-api" in url or "consulta" in url
+    )
+    return is_portal_url and resource_type in {"document", "fetch", "xhr"}
 
 
 def get_public_ip() -> str | None:
@@ -60,23 +103,39 @@ def _query_once(page: Page, rut: str, log: Callable[[str], None] | None = None) 
     if log:
         log("Consultando en nuevo portal Mi Portal SP")
 
-    page.locator("input[placeholder*='33333333']").fill(format_rut_for_portal(rut))
-    page.locator("button").filter(has_text="BUSCAR").click(timeout=10_000)
+    blocking_statuses: list[int] = []
 
+    def inspect_response(response) -> None:
+        if _is_query_response(response) and response.status in _BLOCKING_HTTP_STATUSES:
+            blocking_statuses.append(response.status)
+
+    page.on("response", inspect_response)
     try:
-        page.wait_for_function(
-            """() => {
-                const text = document.body ? document.body.innerText : "";
-                return /se encuentra incorporado\\(a\\) a AFP|no se encuentra incorporada a ninguna Administradora|Error de validaci/i.test(text);
-            }""",
-            timeout=20_000,
-        )
-    except Exception:
-        pass
+        page.locator("input[placeholder*='33333333']").fill(format_rut_for_portal(rut))
+        page.locator("button").filter(has_text="BUSCAR").click(timeout=10_000)
 
-    text = page.locator("body").inner_text(timeout=5_000)
-    if "Error de validación" in text or "ReCaptcha" in text:
-        raise RuntimeError("El portal rechazo la validacion reCAPTCHA.")
+        try:
+            page.wait_for_function(
+                """() => {
+                    const text = document.body ? document.body.innerText : "";
+                    return /se encuentra incorporado\\(a\\) a AFP|no se encuentra incorporada a ninguna Administradora|Error de validaci|ReCaptcha|demasiadas solicitudes|intente nuevamente m[aá]s tarde/i.test(text);
+                }""",
+                timeout=20_000,
+            )
+        except Exception:
+            pass
+
+        text = page.locator("body").inner_text(timeout=5_000)
+    finally:
+        try:
+            page.remove_listener("response", inspect_response)
+        except Exception:
+            pass
+
+    block_reason = detect_block_reason(text, blocking_statuses)
+    if block_reason:
+        status_code = blocking_statuses[0] if blocking_statuses else None
+        raise PortalBlockedError(block_reason, status_code=status_code)
 
     if log:
         log("Leyendo respuesta")
@@ -98,10 +157,14 @@ def query_rut(
     try:
         try:
             return _query_once(page, rut, log=log)
+        except PortalBlockedError:
+            raise
         except Exception as exc:
             if log:
                 log(f"Primer intento fallo: {exc}. Reintentando")
             return _query_once(page, rut, log=log)
+    except PortalBlockedError:
+        raise
     except Exception as exc:
         if log:
             log(f"Consulta fallo definitivamente: {exc}")

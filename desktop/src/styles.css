@@ -132,6 +132,12 @@ h2 {
   background: #eef3ff;
 }
 
+.status.cooldown {
+  border-color: #e4bd65;
+  color: #805b09;
+  background: #fff8e6;
+}
+
 .status.waiting_ip {
   border-color: #e4bd65;
   color: #805b09;

@@ -69,6 +69,7 @@ function App() {
       }
 
       if (event.type === "progress") {
+        setStatus("running");
         setStats((current) => ({
           ...current,
           processed: event.processed,
@@ -91,11 +92,26 @@ function App() {
         setMessage("Consulta completa. Ya puedes guardar el Excel.");
       }
 
-      if (event.type === "ip_limit") {
+      if (event.type === "cooldown") {
+        setStatus("cooldown");
+        setOutputPath(event.outputPath);
+        setMessage(
+          `El portal rechazo una consulta. Esperando ${event.waitSeconds} segundos antes de verificar nuevamente.`
+        );
+      }
+
+      if (event.type === "checkpoint") {
+        setOutputPath(event.outputPath);
+        setMessage(
+          `${event.queriesThisIp} consultas sin bloqueo. Avance guardado; continuando con pausa de ${Number(event.pauseSeconds).toFixed(2)} s.`
+        );
+      }
+
+      if (event.type === "portal_blocked") {
         setStatus("waiting_ip");
         setOutputPath(event.outputPath);
         setMessage(
-          `Limite de ${event.batchLimit || 90} consultas alcanzado. Reinicia el router y verifica la nueva IP.`
+          `${event.reason || "El portal mantiene el bloqueo."} Reinicia el router y verifica la nueva IP.`
         );
       }
 
@@ -219,7 +235,7 @@ function App() {
     setMessage("Selecciona un Excel con una columna RUT.");
   }
 
-  const isRunning = status === "running";
+  const isRunning = status === "running" || status === "cooldown";
   const isWaitingForIp = status === "waiting_ip";
   const isProcessActive = isRunning || isWaitingForIp;
   const canStart = filePath && !isProcessActive;
@@ -473,6 +489,9 @@ function updateTitle(update) {
 function labelForStatus(status) {
   if (status === "running") {
     return "Procesando";
+  }
+  if (status === "cooldown") {
+    return "Pausa preventiva";
   }
   if (status === "done") {
     return "Listo";
