@@ -7,7 +7,14 @@ from openpyxl import Workbook, load_workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
+from bot.excel import (
+    find_or_create_afp2_column,
+    get_pending_rows,
+    read_ruts,
+    to_afp2_zip_bytes,
+    to_bytes,
+    write_afp,
+)
 
 
 def _make_excel(headers: list, rows: list[list]) -> bytes:
@@ -123,3 +130,26 @@ def test_to_bytes_roundtrip():
     raw = to_bytes(wb)
     wb2 = load_workbook(io.BytesIO(raw))
     assert wb2.active.cell(2, 2).value == "HABITAT"
+
+
+def test_to_afp2_zip_bytes_separa_entidades_dinamicamente():
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["RUT", "Nombre", "AFP 2"])
+    ws.append(["1-1", "Uno", "CAPITAL"])
+    ws.append(["2-2", "Dos", "HABITAT"])
+    ws.append(["3-3", "Tres", None])
+
+    raw_zip = to_afp2_zip_bytes(wb)
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(raw_zip)) as archive:
+        assert set(archive.namelist()) == {
+            "AFP2_CAPITAL.xlsx",
+            "AFP2_HABITAT.xlsx",
+            "AFP2_SIN_AFP2.xlsx",
+        }
+        capital = load_workbook(io.BytesIO(archive.read("AFP2_CAPITAL.xlsx")))
+        assert capital.active.max_row == 2
+        assert capital.active.cell(2, 1).value == "1-1"
+        assert capital.active.cell(1, 3).value == "AFP 2"

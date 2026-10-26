@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
+from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_afp2_zip_bytes, to_bytes, write_afp
 from bot.scraper import PortalBlockedError, get_public_ip, normalize_rut, query_rut
 
 SOFT_CHECKPOINT_INTERVAL = 90
@@ -48,7 +48,9 @@ def request_stop(_signum, _frame) -> None:
 
 def save_output(wb, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(to_bytes(wb))
+    output_path.write_bytes(
+        to_afp2_zip_bytes(wb) if output_path.suffix.lower() == ".zip" else to_bytes(wb)
+    )
 
 
 def adaptive_pause_seconds(base_pause: float, remote_queries: int) -> float:

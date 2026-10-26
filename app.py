@@ -4,7 +4,14 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 import streamlit as st
 
-from bot.excel import find_or_create_afp2_column, get_pending_rows, read_ruts, to_bytes, write_afp
+from bot.excel import (
+    find_or_create_afp2_column,
+    get_pending_rows,
+    read_ruts,
+    to_afp2_zip_bytes,
+    to_bytes,
+    write_afp,
+)
 from bot.scraper import PortalBlockedError, get_public_ip, normalize_rut, query_rut
 
 st.set_page_config(page_title="RPA SUPERINTENDENCIA", page_icon="🔍", layout="centered")
@@ -111,7 +118,7 @@ def _render_logs() -> None:
 
 def _prepare_download(reason: str) -> None:
     _close_browser()
-    st.session_state.excel_bytes = to_bytes(st.session_state.wb)
+    st.session_state.excel_bytes = to_afp2_zip_bytes(st.session_state.wb)
     st.session_state.completion_reason = reason
     st.session_state.paso = 3
 
@@ -131,7 +138,7 @@ def paso_descarga() -> None:
         st.markdown(
             "- Sube el Excel con la columna RUT\n"
             "- La app consulta spensiones.cl uno a uno\n"
-            "- Descarga el mismo Excel con la columna **AFP 2** completada"
+            "- Descarga un ZIP con un Excel separado por cada entidad de **AFP 2**"
         )
     with col_cta:
         st.markdown("#### Descarga la app")
@@ -194,9 +201,9 @@ def paso_subir() -> None:
 
     if not pending_rows:
         st.success("Todos los RUTs ya tienen AFP 2 completado.")
-        if st.button("Descargar Excel", type="primary", use_container_width=True):
+        if st.button("Descargar ZIP separado por AFP 2", type="primary", use_container_width=True):
             st.session_state.wb = wb
-            st.session_state.excel_bytes = to_bytes(wb)
+            st.session_state.excel_bytes = to_afp2_zip_bytes(wb)
             st.session_state.completion_reason = "completed"
             st.session_state.paso = 3
             st.rerun()
@@ -451,10 +458,10 @@ def paso_descargar() -> None:
     st.divider()
 
     st.download_button(
-        label="Descargar Excel con AFP 2",
+        label="Descargar ZIP separado por AFP 2",
         data=st.session_state.excel_bytes,
-        file_name="resultado_afp.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        file_name="resultado_afp_separado_por_afp2.zip",
+        mime="application/zip",
         use_container_width=True,
         type="primary",
     )

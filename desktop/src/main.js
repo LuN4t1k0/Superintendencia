@@ -454,8 +454,8 @@ ipcMain.handle("file:saveResult", async (_event, sourcePath) => {
 
   const result = await dialog.showSaveDialog(mainWindow, {
     title: "Guardar resultado",
-    defaultPath: "resultado_afp.xlsx",
-    filters: [{ name: "Excel", extensions: ["xlsx"] }]
+    defaultPath: "resultado_afp_separado_por_afp2.zip",
+    filters: [{ name: "ZIP separado por AFP 2", extensions: ["zip"] }]
   });
 
   if (result.canceled || !result.filePath) {
@@ -479,7 +479,7 @@ ipcMain.handle("process:start", async (_event, options) => {
 
   const outputPath = path.join(
     app.getPath("temp"),
-    `afp-lookup-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.xlsx`
+    `afp-lookup-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.zip`
   );
 
   const args = [

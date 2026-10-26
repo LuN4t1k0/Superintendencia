@@ -1,4 +1,6 @@
 from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+import re
 
 from openpyxl import load_workbook
 from openpyxl.workbook import Workbook
@@ -53,3 +55,42 @@ def to_bytes(wb: Workbook) -> bytes:
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def to_afp2_zip_bytes(wb: Workbook) -> bytes:
+    """Return one XLSX per AFP 2 value, packaged in a ZIP archive.
+
+    The active worksheet is partitioned dynamically using the values present
+    in the ``AFP 2`` column. Headers, workbook formatting and other worksheets
+    are preserved in every generated workbook.
+    """
+    source = to_bytes(wb)
+    source_wb = load_workbook(BytesIO(source))
+    source_ws = source_wb.active
+    afp2_col = find_or_create_afp2_column(source_ws)
+    groups: dict[str, list[int]] = {}
+    for row in range(2, source_ws.max_row + 1):
+        if source_ws.cell(row, 1).value is None and all(
+            source_ws.cell(row, col).value is None for col in range(1, source_ws.max_column + 1)
+        ):
+            continue
+        raw_value = source_ws.cell(row, afp2_col).value
+        key = str(raw_value).strip().upper() if raw_value is not None else ""
+        groups.setdefault(key or "SIN_AFP2", []).append(row)
+
+    archive = BytesIO()
+    with ZipFile(archive, "w", ZIP_DEFLATED) as output_zip:
+        for key, rows in sorted(groups.items()):
+            group_wb = load_workbook(BytesIO(source))
+            group_ws = group_wb.active
+            keep = set(rows)
+            for row in range(group_ws.max_row, 1, -1):
+                if row not in keep:
+                    group_ws.delete_rows(row, 1)
+            filename = f"AFP2_{_safe_filename(key)}.xlsx"
+            output_zip.writestr(filename, to_bytes(group_wb))
+    return archive.getvalue()
+
+
+def _safe_filename(value: str) -> str:
+    return re.sub(r"[^A-Z0-9_-]+", "_", value).strip("_") or "SIN_AFP2"

@@ -89,7 +89,7 @@ function App() {
       if (event.type === "done") {
         setStatus("done");
         setOutputPath(event.outputPath);
-        setMessage("Consulta completa. Ya puedes guardar el Excel.");
+        setMessage("Consulta completa. Ya puedes guardar el ZIP separado por AFP 2.");
       }
 
       if (event.type === "cooldown") {
@@ -350,7 +350,7 @@ function App() {
         </button>
         <button className="secondary" type="button" onClick={saveResult} disabled={!canSave}>
           <Download aria-hidden="true" />
-          Guardar Excel
+          Guardar ZIP
         </button>
         <button
           className="icon-button"
